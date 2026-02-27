@@ -1,71 +1,58 @@
-import joblib
+import streamlit as st
 import pandas as pd
-from flask import Flask, request, jsonify
+import requests
 
-# Initialize Flask app with a name
-app = Flask("Telecom Customer Churn Predictor")
+# Streamlit UI for Customer Churn Prediction
+st.title("Telecom Customer Churn Prediction App")
+st.write("This tool predicts customer churn risk based on their details. Enter the required information below.")
 
-# Load the trained churn prediction model
-model = joblib.load("churn_prediction_model_v1_0.joblib")
+# Collect user input based on dataset columns
+CustomerID = st.number_input("Customer ID", min_value=10000000, max_value=99999999)
+SeniorCitizen = st.selectbox("Senior citizen", ["Yes", "No"])
+Partner = st.selectbox("Does the customer have a partner?", ["Yes", "No"])
+Dependents = st.selectbox("Does the customer have dependents?", ["Yes", "No"])
+PhoneService = st.selectbox("Does the customer have phone service?", ["Yes", "No"])
+InternetService = st.selectbox("Type of Internet Service", ["DSL", "Fiber optic", "No"])
+Contract = st.selectbox("Type of Contract", ["Month-to-month", "One year", "Two year"])
+PaymentMethod = st.selectbox("Payment Method", ["Electronic check", "Mailed check", "Bank transfer", "Credit card"])
+tenure = st.number_input("Tenure (Months with the company)", min_value=0, value=12)
+MonthlyCharges = st.number_input("Monthly Charges", min_value=0.0, value=50.0)
+TotalCharges = st.number_input("Total Charges", min_value=0.0, value=600.0)
 
-# Define a route for the home page
-@app.get('/')
-def home():
-    return "Welcome to the Telecom Customer Churn Prediction API"
+# Convert categorical inputs to match model training
+customer_data = {
+    'SeniorCitizen': 1 if SeniorCitizen == "Yes" else 0,
+    'Partner':Partner,
+    'Dependents': Dependents,
+    'tenure': tenure,
+    'PhoneService': PhoneService,
+    'InternetService': InternetService,
+    'Contract': Contract,
+    'PaymentMethod': PaymentMethod,
+    'MonthlyCharges': MonthlyCharges,
+    'TotalCharges': TotalCharges
+}
 
-# Define an endpoint to predict churn for a single customer
-@app.post('/v1/customer')
-def predict_churn():
-    # Get JSON data from the request
-    customer_data = request.get_json()
 
-    # Extract relevant customer features from the input data
-    sample = {
-        'SeniorCitizen': customer_data['SeniorCitizen'],
-        'Partner': customer_data['Partner'],
-        'Dependents': customer_data['Dependents'],
-        'tenure': customer_data['tenure'],
-        'PhoneService': customer_data['PhoneService'],
-        'InternetService': customer_data['InternetService'],
-        'Contract': customer_data['Contract'],
-        'PaymentMethod': customer_data['PaymentMethod'],
-        'MonthlyCharges': customer_data['MonthlyCharges'],
-        'TotalCharges': customer_data['TotalCharges']
-    }
+if st.button("Predict", type='primary'):
+    response = requests.post("https://Wajidali09-Customer.hf.space/v1/customer", json=customer_data)    # enter user name and space name before running the cell
+    if response.status_code == 200:
+        result = response.json()
+        churn_prediction = result["Prediction"]  # Extract only the value
+        st.write(f"Based on the information provided, the customer with ID {CustomerID} is likely to {churn_prediction}.")
+    else:
+        st.error("Error in API request")
 
-    # Convert the extracted data into a DataFrame
-    input_data = pd.DataFrame([sample])
+# Batch Prediction
+st.subheader("Batch Prediction")
 
-    # Make a churn prediction using the trained model
-    prediction = model.predict(input_data).tolist()[0]
-
-    # Map prediction result to a human-readable label
-    prediction_label = "churn" if prediction == 1 else "not churn"
-
-    # Return the prediction as a JSON response
-    return jsonify({'Prediction': prediction_label})
-
-# Define an endpoint to predict churn for a batch of customers
-@app.post('/v1/customerbatch')
-def predict_churn_batch():
-    # Get the uploaded CSV file from the request
-    file = request.files['file']
-
-    # Read the file into a DataFrame
-    input_data = pd.read_csv(file)
-
-    # Make predictions for the batch data and convert raw predictions into a readable format
-    predictions = [
-        'Churn' if x == 1
-        else "Not Churn"
-        for x in model.predict(input_data.drop("customerID",axis=1)).tolist()
-    ]
-
-    cust_id_list = input_data.customerID.values.tolist()
-    output_dict = dict(zip(cust_id_list, predictions))
-
-    return output_dict
-
-# Run the Flask app in debug mode
-if __name__ == '__main__':
-    app.run(debug=True)
+file = st.file_uploader("Upload CSV file", type=["csv"])
+if file is not None:
+    if st.button("Predict for Batch", type='primary'):
+        response = requests.post("https://Wajidali09-Customer.hf.space/v1/customerbatch", files={"file": file})    # enter user name and space name before running the cell
+        if response.status_code == 200:
+            result = response.json()
+            st.header("Batch Prediction Results")
+            st.write(result)
+        else:
+            st.error("Error in API request")
